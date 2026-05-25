@@ -11,6 +11,7 @@ import {
   ErrorMessage,
   InlineTextEditor,
   LoadingMessage,
+  RecordNotFoundState,
   TabEmptyState,
   TagsSection,
   type TagOption,
@@ -1880,6 +1881,7 @@ export default function SalesDocumentDetailPage({
   const [tags, setTags] = React.useState<TagOption[]>([])
   const [kind, setKind] = React.useState<'order' | 'quote'>('quote')
   const [error, setError] = React.useState<string | null>(null)
+  const [isNotFound, setIsNotFound] = React.useState(false)
   const [reloadKey, setReloadKey] = React.useState(0)
   const [activeTab, setActiveTab] = React.useState<string>('items')
   const [sectionAction, setSectionAction] = React.useState<SectionAction | null>(null)
@@ -2483,12 +2485,14 @@ export default function SalesDocumentDetailPage({
     async function load() {
       setLoading(true)
       setError(null)
+      setIsNotFound(false)
       const requestedKind = searchParams.get('kind')
       const preferredKind = requestedKind === 'order' ? 'order' : requestedKind === 'quote' ? 'quote' : initialKind ?? null
       const kindsToTry: Array<'order' | 'quote'> = preferredKind
         ? [preferredKind, preferredKind === 'order' ? 'quote' : 'order']
         : ['quote', 'order']
       let lastError: string | null = null
+      let hadFetchError = false
       for (const candidate of kindsToTry) {
         try {
           const entry = await fetchDocumentByKind(params.id, candidate)
@@ -2499,13 +2503,18 @@ export default function SalesDocumentDetailPage({
             return
           }
         } catch (err) {
+          hadFetchError = true
           const message = err instanceof Error && err.message ? err.message : loadErrorMessage
           lastError = message
         }
       }
       if (!cancelled) {
         setLoading(false)
-        setError(lastError ?? loadErrorMessage)
+        if (!hadFetchError) {
+          setIsNotFound(true)
+        } else {
+          setError(lastError ?? loadErrorMessage)
+        }
       }
     }
     load().catch((err) => {
@@ -4430,6 +4439,19 @@ export default function SalesDocumentDetailPage({
               className="min-w-[280px] justify-center border-0 bg-transparent text-base shadow-none"
             />
           </div>
+        </PageBody>
+      </Page>
+    )
+  }
+
+  if (isNotFound) {
+    return (
+      <Page>
+        <PageBody>
+          <RecordNotFoundState
+            label={t('sales.documents.detail.error', 'Document not found or inaccessible.')}
+            backHref="/backend/sales/documents"
+          />
         </PageBody>
       </Page>
     )
